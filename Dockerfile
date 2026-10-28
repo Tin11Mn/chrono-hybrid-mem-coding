@@ -2,7 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /service
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ARG PIP_INDEX_URL=https://pypi.org/simple
+RUN pip install --no-cache-dir --index-url "${PIP_INDEX_URL}" -r requirements.txt
 COPY app ./app
 
 ENV MEMORY_DB_PATH=/data/chrono_hybrid_mem.db

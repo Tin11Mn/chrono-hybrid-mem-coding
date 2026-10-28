@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     image: "chrono-hybrid-mem-coding:${CODING_IMAGE_TAG:?Set CODING_IMAGE_TAG in .env.coding}"
     container_name: chrono-hybrid-mem-coding-api
     restart: unless-stopped

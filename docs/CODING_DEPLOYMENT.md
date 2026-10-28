@@ -14,7 +14,7 @@ cp .env.coding.example .env.coding
 chmod 600 .env.coding
 ```
 
-Edit `.env.coding` on the server. Set `CODING_IMAGE_TAG` to the exact checked-out Git commit SHA, `OPENAI_API_KEY` to the runtime key for `gpt-4o-mini`, and `MEMORY_SYSTEM_KEY` to a long random API token. `OPENAI_BASE_URL` is optional. Configure the same system token in the evaluation request using Bearer authentication. The platform Eval Key is a separate credential. Never put any secret in Git, an image, or a URL.
+Edit `.env.coding` on the server. Set `CODING_IMAGE_TAG` to the exact checked-out Git commit SHA, `OPENAI_API_KEY` to the runtime key for `gpt-4o-mini`, and `MEMORY_SYSTEM_KEY` to a long random API token. `PIP_INDEX_URL` selects the Python package index used during the image build; use an index reachable from the server. `OPENAI_BASE_URL` is optional. Configure the same system token in the evaluation request using Bearer authentication. The platform Eval Key is a separate credential. Never put any secret in Git, an image, or a URL.
 
 ## Start and inspect the Coding container
 

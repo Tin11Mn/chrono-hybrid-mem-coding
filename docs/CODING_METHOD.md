@@ -30,3 +30,5 @@ python -m pytest tests/test_hybrid_retrieval.py tests/test_api.py tests/test_mod
 ```
 
 The suite covers symbol/path token expansion, retrieval of a relevant record in the presence of a noisy distractor, and preservation of the original evidence. Official Coding Smoke and Full still need to be run through the competition platform before any result is claimed.
+
+The isolated Docker Compose deployment profile is documented in [CODING_DEPLOYMENT.md](CODING_DEPLOYMENT.md).

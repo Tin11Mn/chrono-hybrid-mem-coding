@@ -1,6 +1,6 @@
 # Coding service deployment
 
-This Compose profile runs Coding as a separate service beside any existing Textual deployment. It uses a distinct container, a persistent named volume, and a distinct database file. It binds only to `127.0.0.1:18002`; an HTTPS reverse proxy on the host can route a Coding subdomain to that local port. The Textual container, database, and public listener are not changed.
+This Compose profile runs Coding as a separate service beside any existing Textual deployment. It uses a distinct container, a persistent named volume, and a distinct database file. It binds to host port `18002` for direct NAT forwarding. The Textual container, database, and existing public listener are not changed.
 
 ## Prepare the server
 
@@ -23,7 +23,7 @@ docker compose --env-file .env.coding -p chrono-coding -f compose.coding.yaml up
 docker compose --env-file .env.coding -p chrono-coding -f compose.coding.yaml ps
 ```
 
-Configure the host's HTTPS reverse proxy to forward the Coding hostname to `http://127.0.0.1:18002` without changing the Textual virtual host. Keep the service port loopback-only; do not expose port 18002 directly to the internet. Check `GET /health`, then run an isolated Add → Search smoke using the same `user_id` and verify that Search returns the original message. Use the official platform Smoke after the endpoint and access request have been reviewed.
+For direct NAT access, add a TCP forwarding rule from a free public port to instance port `18002`. The endpoint is `http://<public-ip>:<public-port>`. This sends API traffic over plain HTTP; use TLS termination if the platform requires HTTPS or if the bearer token must be encrypted in transit. Check `GET /health`, then run an isolated Add → Search smoke using the same `user_id` and verify that Search returns the original message. Use the official platform Smoke after the endpoint and access request have been reviewed.
 
 The named volume `chrono_hybrid_mem_coding_data` stores `/data/chrono_hybrid_mem_coding.db` independently from Textual. Preserve this volume when updating or restarting the container. `docker compose down` keeps it; avoid `docker compose down -v` and volume-pruning commands.
 
@@ -33,4 +33,4 @@ Before Full, record the fixed Git commit, image tag, public `/add` and `/search`
 
 ## Host-specific details still required
 
-This profile assumes Docker Compose and a host-level HTTPS reverse proxy. Confirm the server OS, Compose availability, proxy type, DNS name, and the existing Textual launch method before applying it. If the server uses a containerized reverse proxy or NAT-generated external ports, adapt the network/port mapping without sharing the Textual database or replacing its service.
+This profile assumes Docker Compose. For servers behind NAT, forward an external TCP port to instance port `18002`. Add a TLS proxy only when HTTPS is required; keep the Coding database and container separate from the existing Textual service.

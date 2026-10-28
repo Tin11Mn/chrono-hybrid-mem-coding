@@ -17,7 +17,7 @@ services:
       MEMORY_EVIDENCE_NEED_RETRIEVAL: "true"
       MEMORY_NEED_SELECT_BY_BM25: "true"
     ports:
-      - "127.0.0.1:18002:8000"
+      - "0.0.0.0:18002:8000"
     volumes:
       - coding-data:/data
     healthcheck:

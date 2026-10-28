@@ -1,6 +1,6 @@
 # Coding service deployment
 
-This Compose profile runs Coding as a separate service beside any existing Textual deployment. It uses a distinct container, a persistent named volume, and a distinct database file. It binds only to `127.0.0.1:8001`; an HTTPS reverse proxy on the host can route a Coding subdomain to that local port. The Textual container, database, and public listener are not changed.
+This Compose profile runs Coding as a separate service beside any existing Textual deployment. It uses a distinct container, a persistent named volume, and a distinct database file. It binds only to `127.0.0.1:8002`; an HTTPS reverse proxy on the host can route a Coding subdomain to that local port. The Textual container, database, and public listener are not changed.
 
 ## Prepare the server
 
@@ -23,7 +23,7 @@ docker compose --env-file .env.coding -p chrono-coding -f compose.coding.yaml up
 docker compose --env-file .env.coding -p chrono-coding -f compose.coding.yaml ps
 ```
 
-Configure the host's existing HTTPS reverse proxy to forward the Coding hostname to `http://127.0.0.1:8001` without changing the Textual virtual host. Keep the service port loopback-only; do not expose port 8001 directly to the internet. Check `GET /health`, then run an isolated Add → Search smoke using the same `user_id` and verify that Search returns the original message. Use the official platform Smoke after the endpoint and access request have been reviewed.
+Configure the host's HTTPS reverse proxy to forward the Coding hostname to `http://127.0.0.1:8002` without changing the Textual virtual host. Keep the service port loopback-only; do not expose port 8002 directly to the internet. Check `GET /health`, then run an isolated Add → Search smoke using the same `user_id` and verify that Search returns the original message. Use the official platform Smoke after the endpoint and access request have been reviewed.
 
 The named volume `chrono_hybrid_mem_coding_data` stores `/data/chrono_hybrid_mem_coding.db` independently from Textual. Preserve this volume when updating or restarting the container. `docker compose down` keeps it; avoid `docker compose down -v` and volume-pruning commands.
 

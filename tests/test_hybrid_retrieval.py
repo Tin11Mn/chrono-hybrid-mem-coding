@@ -3,6 +3,7 @@ from app.storage import (
     MemoryStore,
     bind_first_person_to_speaker,
     candidate_ranking_text,
+    code_aware_index_terms,
     latent_message_text,
 )
 
@@ -211,6 +212,45 @@ def test_query_stop_words_do_not_hide_content_terms(tmp_path):
     results = store.search(user_id="user-a", query="What does Milo prefer?", top_k=1)
 
     assert results[0].content == "Milo prefers jasmine tea."
+
+
+def test_code_aware_index_terms_split_symbols_and_paths():
+    terms = code_aware_index_terms(
+        "HTTPResponse::from_json src/http/clientFactory.ts"
+    )
+
+    assert terms == ["http", "response", "from", "json", "src", "client", "factory", "ts"]
+
+
+def test_code_identifier_parts_retrieve_engineering_memory(tmp_path):
+    store = MemoryStore(str(tmp_path / "memory.db"))
+    store.initialize()
+    source = (
+        "CHM-194 QueryPlanBuilder::reifyMemoryToken src/index/planBuilder.py "
+        "IdentifierNormalizationError camelCase commit a1b2c3d "
+        "regression_test:test_reifyMemoryToken_preserves_paths"
+    )
+    distractor = (
+        "CHM-195 CacheQueryBuilder::normalizeMemoryToken src/cache/planBuilder.py "
+        "CacheIdentifierCollision staleCacheKey commit b2c3d4e "
+        "regression_test:test_normalizeMemoryToken_preserves_keys"
+    )
+    store.add(AddRequest(
+        request_id="coding-memory", user_id="repo-a", session_id="session-a",
+        messages=[
+            {"role": "user", "content": source},
+            {"role": "user", "content": distractor},
+        ],
+    ))
+
+    results = store.search(
+        user_id="repo-a",
+        query="What error occurred for mixed-case memory normalization?",
+        top_k=1,
+    )
+
+    assert results
+    assert results[0].content == source
 
 
 def test_first_person_coreference_binds_only_unambiguous_forms():

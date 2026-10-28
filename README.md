@@ -17,12 +17,14 @@
 <!-- README_FACTS: main=stable-post-submission-research; p3=experimental; official-v020-mapping=CONFIRMED -->
 
 <p align="center">
-  Agent Memory Challenge · Academic Textual Memory · <strong>Rank 5</strong> · <strong>Overall 44.33</strong>
+  Agent Memory Challenge · Coding Memory track · <strong>方法开发中</strong>
 </p>
 
-ChronoHybridMem 是一项可通过 Docker 部署的长期记忆服务，用于存储对话轮次，并检索与查询最相关的原始证据。该项目为 Agent Memory Challenge 而开发，并有意将功能边界限定在证据检索：它不会生成基准测试所要求的最终答案。
+<p align="center">历史 Textual 赛道成绩：<strong>Rank 5</strong> · <strong>Overall 44.33</strong>（不是 Coding 成绩）</p>
 
-默认分支 `main` 保留经过验证的稳定版赛后本地研究路径 P1。P3 Evidence Graph 代码仅作为默认关闭的实验性研究能力保留，不属于稳定检索路径。
+ChronoHybridMem 是一项可通过 Docker 部署的长期记忆服务，用于存储对话轮次，并检索与查询最相关的原始证据。该项目为 Agent Memory Challenge 而开发，并有意将功能边界限定在证据检索：它不会生成基准测试所要求的最终答案。本仓库的 Coding 方法见[编程赛道方法说明](docs/CODING_METHOD.md)；当前没有官方 Coding 评测成绩。
+
+默认分支 `main` 保留经过验证的稳定版赛后本地研究路径 P1。P3 Evidence Graph 代码仅作为默认关闭的实验性研究能力保留，不属于稳定检索路径。Coding 专用的代码标识符索引是本仓库新增的检索适配，尚未通过官方 Coding Smoke 或 Full。
 
 ## 系统功能
 

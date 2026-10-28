@@ -417,6 +417,50 @@ def latent_message_text(content: str, speaker: str, event_ts: Optional[int]) -> 
     return "\n".join(parts)
 
 
+_CODE_IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_./\\:-]*")
+_CODE_CAMEL_BOUNDARY_RE = re.compile(
+    r"[a-z0-9][A-Z]|[A-Z]{2,}[A-Z][a-z]"
+)
+_CODE_SEPARATOR_RE = re.compile(r"[/\\.:_-]+")
+
+
+def code_aware_index_terms(content: str, limit: int = 96) -> List[str]:
+    """Expand code-shaped identifiers into searchable FTS tokens.
+
+    The exact source remains stored and returned as-is. These extra tokens are
+    only added to the lexical index so natural-language queries can match
+    camelCase symbols, snake_case names, qualified symbols, and file paths.
+    """
+    terms: List[str] = []
+    seen = set()
+    for candidate in _CODE_IDENTIFIER_RE.findall(content):
+        has_code_shape = (
+            bool(_CODE_CAMEL_BOUNDARY_RE.search(candidate))
+            or "_" in candidate
+            or bool(re.search(r"[A-Za-z0-9][./\\:][A-Za-z0-9]", candidate))
+        )
+        if not has_code_shape:
+            continue
+        for component in _CODE_SEPARATOR_RE.split(candidate):
+            if not component:
+                continue
+            separated = re.sub(
+                r"([A-Z]+)([A-Z][a-z])", r"\1 \2", component
+            )
+            separated = re.sub(
+                r"([a-z0-9])([A-Z])", r"\1 \2", separated
+            )
+            for term in re.findall(r"[A-Za-z][A-Za-z0-9]*", separated):
+                normalized = term.casefold()
+                if len(normalized) < 2 or normalized in seen:
+                    continue
+                seen.add(normalized)
+                terms.append(normalized)
+                if len(terms) >= limit:
+                    return terms
+    return terms
+
+
 def candidate_ranking_text(
     content: str,
     speaker: str,
@@ -3441,6 +3485,9 @@ class MemoryStore:
                 indexed_content = latent_message_text(
                     message.content, message.role, message.timestamp
                 )
+                code_terms = code_aware_index_terms(message.content)
+                if code_terms:
+                    indexed_content += "\n" + " ".join(code_terms)
                 cursor = connection.execute(
                     """INSERT INTO raw_messages(user_id, session_id, role, content, event_ts, sequence, created_at)
                        VALUES (?, ?, ?, ?, ?, ?, ?)""",

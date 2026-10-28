@@ -17,12 +17,14 @@
 <!-- README_FACTS: main=stable-post-submission-research; p3=experimental; official-v020-mapping=CONFIRMED -->
 
 <p align="center">
-  Agent Memory Challenge · Academic Textual Memory · <strong>Rank 5</strong> · <strong>Overall 44.33</strong>
+  Agent Memory Challenge · Coding Memory track · <strong>Method in development</strong>
 </p>
 
-ChronoHybridMem is a Docker-deployable long-term memory service that stores conversation turns and retrieves the original evidence most relevant to a query. It was developed for the Agent Memory Challenge and deliberately stops at evidence retrieval: it does not generate the benchmark's final answer.
+<p align="center">Historical Textual track result: <strong>Rank 5</strong> · <strong>Overall 44.33</strong> (not a Coding result)</p>
 
-The default branch, `main`, uses P4-A q2 with bm25 candidate selection as its validated stable post-submission local research baseline (Hit@1 0.5850 on 1,976 completable queries). P3 Evidence Graph code remains a default-disabled experimental research surface and is not part of the stable retrieval path.
+ChronoHybridMem is a Docker-deployable long-term memory service that stores conversation turns and retrieves the original evidence most relevant to a query. It was developed for the Agent Memory Challenge and deliberately stops at evidence retrieval: it does not generate the benchmark's final answer. This repository's Coding method is described in [the Coding track method note](docs/CODING_METHOD.md); it has no official Coding evaluation result yet.
+
+The default branch, `main`, uses P4-A q2 with bm25 candidate selection as its validated stable post-submission local research baseline (Hit@1 0.5850 on 1,976 completable queries). P3 Evidence Graph code remains a default-disabled experimental research surface and is not part of the stable retrieval path. Coding-specific code-identifier indexing is a new retrieval adaptation in this repository and has not passed official Coding Smoke or Full.
 
 ## What the system does
 

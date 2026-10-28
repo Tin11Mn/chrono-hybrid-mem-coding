@@ -17,12 +17,14 @@
 <!-- README_FACTS: main=stable-post-submission-research; p3=experimental; official-v020-mapping=CONFIRMED -->
 
 <p align="center">
-  Agent Memory Challenge · Academic Textual Memory · <strong>Rank 5</strong> · <strong>Overall 44.33</strong>
+  Agent Memory Challenge · Coding Memory track · <strong>방법 개발 중</strong>
 </p>
 
-ChronoHybridMem은 대화 턴을 저장하고 질의와 가장 관련 있는 원본 증거를 검색하는 Docker 배포형 장기 메모리 서비스입니다. Agent Memory Challenge를 위해 개발되었으며, 의도적으로 증거 검색까지만 담당합니다. 벤치마크의 최종 답변은 생성하지 않습니다.
+<p align="center">Textual 트랙의 과거 결과: <strong>Rank 5</strong> · <strong>Overall 44.33</strong> (Coding 결과가 아님)</p>
 
-기본 브랜치 `main`은 검증된 안정적 제출 후 로컬 연구 베이스라인으로 P4-A q2 + bm25 selection를 사용합니다(완료 가능한 질의 1,976개 기준 Hit@1 0.5850). P3 Evidence Graph 코드는 기본적으로 꺼진 실험 연구 기능으로 남아 있으며 안정 검색 경로의 일부가 아닙니다.
+ChronoHybridMem은 대화 턴을 저장하고 질의와 가장 관련 있는 원본 증거를 검색하는 Docker 배포형 장기 메모리 서비스입니다. Agent Memory Challenge를 위해 개발되었으며, 의도적으로 증거 검색까지만 담당합니다. 벤치마크의 최종 답변은 생성하지 않습니다. 이 저장소의 Coding 방법은 [트랙 방법 설명](docs/CODING_METHOD.md)에 정리되어 있으며, 아직 공식 Coding 평가 결과는 없습니다.
+
+기본 브랜치 `main`은 검증된 안정적 제출 후 로컬 연구 베이스라인으로 P4-A q2 + bm25 selection를 사용합니다(완료 가능한 질의 1,976개 기준 Hit@1 0.5850). P3 Evidence Graph 코드는 기본적으로 꺼진 실험 연구 기능으로 남아 있으며 안정 검색 경로의 일부가 아닙니다. Coding 전용 코드 식별자 인덱싱은 이 저장소의 새 검색 적응이며 공식 Coding Smoke 또는 Full은 아직 통과하지 않았습니다.
 
 ## 시스템이 하는 일
 

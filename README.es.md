@@ -17,12 +17,14 @@
 <!-- README_FACTS: main=stable-post-submission-research; p3=experimental; official-v020-mapping=CONFIRMED -->
 
 <p align="center">
-  Agent Memory Challenge · Academic Textual Memory · <strong>Rank 5</strong> · <strong>Overall 44.33</strong>
+  Agent Memory Challenge · Coding Memory track · <strong>Método en desarrollo</strong>
 </p>
 
-ChronoHybridMem es un servicio de memoria a largo plazo desplegable con Docker que almacena turnos de conversación y recupera las evidencias originales más pertinentes para una consulta. Se desarrolló para el Agent Memory Challenge y se limita deliberadamente a la recuperación de evidencias: no genera la respuesta final del benchmark.
+<p align="center">Resultado histórico de la categoría Textual: <strong>Rank 5</strong> · <strong>Overall 44.33</strong> (no es un resultado de Coding)</p>
 
-La rama predeterminada, `main`, utiliza P4-A q2 + bm25 selection como su línea base estable y validada de investigación local posterior al envío (Hit@1 0.5850 sobre 1,976 consultas completables). El código P3 Evidence Graph sigue siendo una capacidad experimental desactivada por defecto y no forma parte de la ruta de recuperación estable.
+ChronoHybridMem es un servicio de memoria a largo plazo desplegable con Docker que almacena turnos de conversación y recupera las evidencias originales más pertinentes para una consulta. Se desarrolló para el Agent Memory Challenge y se limita deliberadamente a la recuperación de evidencias: no genera la respuesta final del benchmark. El método Coding de este repositorio se describe en [la nota metodológica de la categoría Coding](docs/CODING_METHOD.md); todavía no hay un resultado oficial de Coding.
+
+La rama predeterminada, `main`, utiliza P4-A q2 + bm25 selection como su línea base estable y validada de investigación local posterior al envío (Hit@1 0.5850 sobre 1,976 consultas completables). El código P3 Evidence Graph sigue siendo una capacidad experimental desactivada por defecto y no forma parte de la ruta de recuperación estable. La indexación específica de identificadores de código es una adaptación nueva de este repositorio y aún no ha superado Coding Smoke ni Full oficiales.
 
 ## Qué hace el sistema
 

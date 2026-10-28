@@ -17,12 +17,14 @@
 <!-- README_FACTS: main=stable-post-submission-research; p3=experimental; official-v020-mapping=CONFIRMED -->
 
 <p align="center">
-  Agent Memory Challenge · Academic Textual Memory · <strong>Rank 5</strong> · <strong>Overall 44.33</strong>
+  Agent Memory Challenge · Coding Memory track · <strong>手法を開発中</strong>
 </p>
 
-ChronoHybridMem は、会話ターンを保存し、クエリとの関連性が最も高い原典の根拠を検索する、Docker でデプロイ可能な長期メモリサービスです。Agent Memory Challenge のために開発され、意図的に根拠検索までを責務としています。ベンチマークの最終回答は生成しません。
+<p align="center">Textual トラックの過去の結果：<strong>Rank 5</strong> · <strong>Overall 44.33</strong>（Coding の結果ではありません）</p>
 
-デフォルトブランチの `main` は、検証済みで安定した提出後ローカル研究のベースラインとして、P4-A q2 + bm25 selection を使用します（Hit@1 0.5850、1,976 件の実行可能なクエリに基づく）。P3 Evidence Graph のコードは、既定で無効な実験的研究機能のままであり、安定した検索パスの一部ではありません。
+ChronoHybridMem は、会話ターンを保存し、クエリとの関連性が最も高い原典の根拠を検索する、Docker でデプロイ可能な長期メモリサービスです。Agent Memory Challenge のために開発され、意図的に根拠検索までを責務としています。ベンチマークの最終回答は生成しません。このリポジトリの Coding 手法は[トラック方法説明](docs/CODING_METHOD.md)に記載しています。公式 Coding 評価の結果はまだありません。
+
+デフォルトブランチの `main` は、検証済みで安定した提出後ローカル研究のベースラインとして、P4-A q2 + bm25 selection を使用します（Hit@1 0.5850、1,976 件の実行可能なクエリに基づく）。P3 Evidence Graph のコードは、既定で無効な実験的研究機能のままであり、安定した検索パスの一部ではありません。Coding 向けコード識別子インデックスは本リポジトリで追加した新しい検索適応で、公式 Coding Smoke / Full は未実施です。
 
 ## システムの役割
 

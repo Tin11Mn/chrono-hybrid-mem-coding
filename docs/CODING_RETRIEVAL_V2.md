@@ -86,3 +86,14 @@ traversal, API-level rate limiting, and the Answer context cost of full raw
 records remain limitations. Real gpt-4o-mini ranking quality requires a fresh
 platform Smoke against the newly declared fixed version. Never redeploy this
 candidate under the old registered version name while an evaluation is active.
+
+## Platform follow-up
+
+After this report was first written, v2 was bound and activated on the public
+Coding endpoint with a fresh data volume; the previous container and volume
+were retained. The Smoke row completed at 17:36 HKT predates that activation,
+so its `coding-v2` label did not mean the v2 image served its requests. A later
+v2 Smoke still reported 0.00. Aggregate logs after activation show successful
+Add/Search HTTP responses and no observed model, authentication, quota, or
+timeout errors. This confirms integration only; see
+[the v3 follow-up](CODING_RETRIEVAL_V3.md) for the next retrieval hypothesis.

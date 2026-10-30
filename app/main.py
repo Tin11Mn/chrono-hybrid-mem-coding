@@ -47,8 +47,11 @@ def need_select_by_bm25_from_environment() -> bool:
     return os.getenv("MEMORY_NEED_SELECT_BY_BM25", "true").lower() == "true"
 
 
-def adjacent_turn_expansion_from_environment() -> bool:
-    return os.getenv("MEMORY_ADJACENT_TURN_EXPANSION", "false").lower() == "true"
+def adjacent_turn_expansion_from_environment(
+    *, coding_retrieval: bool = False
+) -> bool:
+    default = "true" if coding_retrieval else "false"
+    return os.getenv("MEMORY_ADJACENT_TURN_EXPANSION", default).lower() == "true"
 
 
 def _adjacent_turn_limit_from_environment(name: str, default: int) -> int:
@@ -338,11 +341,16 @@ def _verify_auth(credentials = Depends(_auth_scheme)) -> str:
 
 def create_app(database_path: str = None) -> FastAPI:
     path = database_path or os.getenv("MEMORY_DB_PATH", "data/chrono_hybrid_mem.db")
+    coding_retrieval = (
+        os.getenv("MEMORY_CODING_RETRIEVAL", "false").lower() == "true"
+    )
     structured_query_plan = structured_query_plan_from_environment()
     set_aware_rerank = set_aware_rerank_from_environment()
     evidence_need_retrieval = evidence_need_retrieval_from_environment()
     need_select_by_bm25 = need_select_by_bm25_from_environment()
-    adjacent_turn_expansion = adjacent_turn_expansion_from_environment()
+    adjacent_turn_expansion = adjacent_turn_expansion_from_environment(
+        coding_retrieval=coding_retrieval
+    )
     evidence_graph = evidence_graph_from_environment()
     evidence_anchors = evidence_anchors_from_environment()
 
@@ -426,7 +434,7 @@ def create_app(database_path: str = None) -> FastAPI:
     store = MemoryStore(
         path,
         model=model_from_environment(),
-        coding_retrieval=os.getenv("MEMORY_CODING_RETRIEVAL", "false").lower() == "true",
+        coding_retrieval=coding_retrieval,
         temporal_bonus=temporal_bonus_from_environment(),
         semantic_retriever=local_semantic_retriever_from_environment(),
         dense_rrf_weight=dense_rrf_weight_from_environment(),

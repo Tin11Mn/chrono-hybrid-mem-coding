@@ -598,6 +598,7 @@ def extract_bridge_terms(
 class MemoryStore:
     RRF_CONSTANT = 60
     MODEL_RERANK_LIMIT = 30
+    CODING_TOP_K_MAX = 12
     # Direction-3 candidate compression: when llm_rerank_top_n > 0, only the
     # first N rerank-pool candidates (fusion order) are sent to the Search
     # model for ranking. Long candidate lists dilute the local model's
@@ -5569,7 +5570,11 @@ class MemoryStore:
             ranking_metadata=ranking_metadata,
             message_ids=message_ids if self.model else None,
         )
-        final_results = deduplicated[:top_k]
+        result_limit = (
+            min(top_k, self.CODING_TOP_K_MAX)
+            if self.coding_retrieval else top_k
+        )
+        final_results = deduplicated[:result_limit]
         retrieval_trace["final_ids"] = [
             result.id for result in final_results
         ]

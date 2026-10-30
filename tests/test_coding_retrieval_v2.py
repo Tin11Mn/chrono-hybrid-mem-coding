@@ -168,3 +168,43 @@ def test_api_environment_enables_coding_path(tmp_path, monkeypatch):
     })
     assert response.status_code == 200
     assert response.json()['data'][0]['content'] == 'socket_drain_barrier regression passed.'
+
+
+def test_coding_search_returns_a_bounded_evidence_set(tmp_path):
+    database = str(tmp_path / 'bounded.db')
+    seed = MemoryStore(database, coding_retrieval=True)
+    seed.initialize()
+    seed.add(AddRequest(
+        request_id='many-matches', user_id='u', session_id='s', messages=[
+            {'role': 'assistant', 'content':
+             f'lease_epoch_guard evidence record {index} root cause regression'}
+            for index in range(24)
+        ]
+    ))
+
+    coding_results = seed.search(
+        user_id='u', query='lease_epoch_guard root cause regression', top_k=100
+    )
+    ordinary_results = MemoryStore(database).search(
+        user_id='u', query='lease_epoch_guard root cause regression', top_k=100
+    )
+
+    assert len(coding_results) == MemoryStore.CODING_TOP_K_MAX
+    assert len(ordinary_results) == 24
+    assert len(seed.search(
+        user_id='u', query='lease_epoch_guard root cause regression', top_k=5
+    )) == 5
+
+
+def test_adjacent_expansion_defaults_to_coding_only_and_can_be_overridden(monkeypatch):
+    from app import main
+
+    monkeypatch.delenv('MEMORY_ADJACENT_TURN_EXPANSION', raising=False)
+    assert main.adjacent_turn_expansion_from_environment() is False
+    assert main.adjacent_turn_expansion_from_environment(
+        coding_retrieval=True
+    ) is True
+    monkeypatch.setenv('MEMORY_ADJACENT_TURN_EXPANSION', 'false')
+    assert main.adjacent_turn_expansion_from_environment(
+        coding_retrieval=True
+    ) is False

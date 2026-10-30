@@ -4,7 +4,9 @@
 
 The October 30 platform screenshot reports a successful one-task Coding Smoke
 with zero solve score. This establishes API integration, not overall retrieval
-quality or a root cause. Runtime inspection was limited to aggregate metadata:
+quality or a root cause. Its reported file-localization rate is 100%, so the
+solve failure cannot simply be equated with failure to locate a file.
+Runtime inspection was limited to aggregate metadata:
 the registered b460e75 container was healthy with zero restarts, seven successful
 Adds, eight successful Searches, 1,409 messages, and no logged lock, model-auth,
 timeout, or context-limit errors. No private benchmark content, questions,
@@ -68,6 +70,16 @@ tests and fails five inherited tests: multilingual README parity (one) and the
 disabled legacy session-fact schema path (four). Running those same tests on
 the untouched b460e75 snapshot reproduces all five failures. No database schema
 repair is included in this change. A separately added API flag test also passes.
+
+An isolated Ubuntu Docker candidate built from
+`5b698720d7a1f8996717c5842e9ec5ebf3a1625b` also passed one real gpt-4o-mini
+synthetic check. Twelve independently written engineering records were added in
+3.08 seconds; Search completed in 4.71 seconds and returned both the fix and its
+regression validation in Top 3, with all returned records identical to inputs.
+This is one integration measurement, not a production latency distribution or
+an official score. The candidate used a new empty volume and loopback port
+18003, then was stopped. The public registered b460e75 container stayed healthy
+and retained its original image and volume throughout.
 
 No official score improvement is claimed. Dense semantic recall, graph
 traversal, API-level rate limiting, and the Answer context cost of full raw

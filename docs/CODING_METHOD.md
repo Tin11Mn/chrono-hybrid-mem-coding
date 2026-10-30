@@ -6,7 +6,7 @@ This repository is developing a Coding Memory specialization of ChronoHybridMem.
 
 ## Method
 
-The service keeps the existing Add/Search API, SQLite database schema, FTS5 channels, `gpt-4o-mini` query planning and candidate ordering, user isolation, and original-evidence response behavior.
+The service keeps the existing Add/Search API, SQLite database schema, FTS5 channels, `gpt-4o-mini` query planning, user isolation, and original-evidence response behavior. The v2 Coding profile enables `MEMORY_CODING_RETRIEVAL`, which adds query identifier splitting, bounded engineering-ranker views, a Coding ranking rubric, and batch index annotations outside database write transactions. See [the v2 design, reference disclosure and verification](CODING_RETRIEVAL_V2.md).
 
 At Add time, the indexer scans each message for code-shaped identifiers: camelCase and acronym boundaries, `snake_case`, qualified symbols, and path-like tokens. It splits those forms into lowercase lexical terms and appends the derived terms to the existing FTS index text. For example, `QueryPlanBuilder::reifyMemoryToken` contributes terms such as `query`, `plan`, `builder`, `reify`, `memory`, and `token`; `src/index/planBuilder.py` contributes its path and filename components.
 
@@ -15,7 +15,7 @@ The derived text is used only to improve candidate retrieval. The original `raw_
 ## Scope and limits
 
 - This is lexical expansion, not code parsing or semantic understanding. It does not infer call graphs, resolve aliases, or know whether two symbols are equivalent.
-- Query-side camelCase splitting is not added yet; current benefits come from matching ordinary query terms against expanded source-side index terms.
+- Query-side camelCase/snake_case splitting is enabled by the v2 Coding profile. Ordinary deployments leave this optional path disabled.
 - The synthetic relevant/noisy fixture is a regression check only. It is not CAMBench data and does not establish benchmark performance.
 - The existing Textual research baseline and its reported scores are inherited project history, not evidence of Coding track performance.
 

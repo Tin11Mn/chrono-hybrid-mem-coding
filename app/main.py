@@ -425,6 +425,7 @@ def create_app(database_path: str = None) -> FastAPI:
     local_reranker = local_reranker_from_environment()
     store = MemoryStore(
         path,
+        coding_retrieval=os.getenv("MEMORY_CODING_RETRIEVAL", "false").lower() == "true",
         model=model_from_environment(),
         temporal_bonus=temporal_bonus_from_environment(),
         semantic_retriever=local_semantic_retriever_from_environment(),

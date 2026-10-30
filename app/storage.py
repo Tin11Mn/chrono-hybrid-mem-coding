@@ -763,8 +763,10 @@ class MemoryStore:
                  session_fact_layer: bool = False,
                  session_fact_rrf_weight: float = SESSION_FACT_RRF_WEIGHT_DEFAULT,
                  session_fact_quota: int = SESSION_FACT_QUOTA_DEFAULT,
-                 session_fact_top_n: int = SESSION_FACT_TOP_N_DEFAULT) -> None:
+                 session_fact_top_n: int = SESSION_FACT_TOP_N_DEFAULT,
+                 coding_retrieval: bool = False) -> None:
         self.database_path = database_path
+        self.coding_retrieval = bool(coding_retrieval)
         self.model = model
         self.temporal_bonus = temporal_bonus
         self.semantic_retriever = semantic_retriever
@@ -3471,6 +3473,22 @@ class MemoryStore:
 
     def add(self, request: AddRequest) -> None:
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        coding_facts = None
+        if (self.coding_retrieval and self.model
+                and not (self.evidence_graph or self.evidence_anchors)
+                and callable(getattr(self.model, "extract_coding_batch", None))):
+            # Check retries before remote work. Races are still resolved by the
+            # unique ingestion key in the write transaction below.
+            with self._connection() as check:
+                if check.execute("SELECT 1 FROM ingestions WHERE request_id = ?",
+                                 (request.request_id,)).fetchone():
+                    return
+            coding_facts = self.model.extract_coding_batch([
+                {"role": message.role, "content": message.content}
+                for message in request.messages
+            ])
+            if len(coding_facts) != len(request.messages):
+                raise RuntimeError("Coding annotations must align with source messages")
         with self._connection() as connection:
             try:
                 connection.execute(
@@ -3485,7 +3503,9 @@ class MemoryStore:
                 indexed_content = latent_message_text(
                     message.content, message.role, message.timestamp
                 )
-                code_terms = code_aware_index_terms(message.content)
+                code_terms = code_aware_index_terms(
+                    message.content, limit=512 if self.coding_retrieval else 96
+                )
                 if code_terms:
                     indexed_content += "\n" + " ".join(code_terms)
                 cursor = connection.execute(
@@ -3506,7 +3526,9 @@ class MemoryStore:
                 inserted_messages.append((message_id, indexed_content))
                 if self.model:
                     graph_payload = None
-                    if (self.evidence_graph or self.evidence_anchors) and callable(
+                    if coding_facts is not None:
+                        facts = coding_facts[sequence]
+                    elif (self.evidence_graph or self.evidence_anchors) and callable(
                         getattr(self.model, "extract_memory", None)
                     ):
                         extraction = self.model.extract_memory(
@@ -3786,6 +3808,10 @@ class MemoryStore:
         raw_terms = re.findall(r"[\w]+", query, flags=re.UNICODE)
         terms = [term for term in raw_terms if term.casefold() not in self.QUERY_STOP_WORDS]
         terms = terms or raw_terms
+        if self.coding_retrieval:
+            # Match a code-shaped query against the split source-side index.
+            # The original query and options still go to the planner unchanged.
+            terms.extend(code_aware_index_terms(query))
         support_terms = []
         query_plan: Dict[str, Any] = {}
         if self.model:
@@ -5506,7 +5532,14 @@ class MemoryStore:
                     ),
                 })
             retrieval_trace["llm_rank_candidate_count"] = len(candidates)
-            ordered_ids = self.model.rank_candidates(query, options or [], candidates)
+            if self.coding_retrieval:
+                from .coding_retrieval import evidence_excerpt
+                for candidate in candidates:
+                    candidate["content"] = evidence_excerpt(candidate["content"], terms)
+                ranker = getattr(self.model, "rank_coding_candidates", self.model.rank_candidates)
+            else:
+                ranker = self.model.rank_candidates
+            ordered_ids = ranker(query, options or [], candidates)
             rank_confidence: Dict[str, float] = {}
             if self.p5_gate and hasattr(self.model, "rank_candidates_with_confidence"):
                 ordered_ids, rank_confidence = (

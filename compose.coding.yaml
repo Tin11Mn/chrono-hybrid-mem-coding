@@ -11,6 +11,8 @@ services:
     env_file:
       - .env.coding
     environment:
+      MEMORY_CODING_RETRIEVAL: "true"
+      MEMORY_ADJACENT_TURN_EXPANSION: "true"
       MEMORY_REQUIRE_MODEL: "true"
       MEMORY_DB_PATH: /data/chrono_hybrid_mem_coding.db
       MEMORY_STRUCTURED_QUERY_PLAN: "true"

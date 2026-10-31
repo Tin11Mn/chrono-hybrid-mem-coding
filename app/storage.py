@@ -1,5 +1,6 @@
 import copy
 import hashlib
+import logging
 import re
 import sqlite3
 import math
@@ -598,6 +599,7 @@ def extract_bridge_terms(
 class MemoryStore:
     RRF_CONSTANT = 60
     MODEL_RERANK_LIMIT = 30
+    CODING_TOP_K_MAX = 12
     # Direction-3 candidate compression: when llm_rerank_top_n > 0, only the
     # first N rerank-pool candidates (fusion order) are sent to the Search
     # model for ranking. Long candidate lists dilute the local model's
@@ -763,8 +765,10 @@ class MemoryStore:
                  session_fact_layer: bool = False,
                  session_fact_rrf_weight: float = SESSION_FACT_RRF_WEIGHT_DEFAULT,
                  session_fact_quota: int = SESSION_FACT_QUOTA_DEFAULT,
-                 session_fact_top_n: int = SESSION_FACT_TOP_N_DEFAULT) -> None:
+                 session_fact_top_n: int = SESSION_FACT_TOP_N_DEFAULT,
+                 coding_retrieval: bool = False) -> None:
         self.database_path = database_path
+        self.coding_retrieval = bool(coding_retrieval)
         self.model = model
         self.temporal_bonus = temporal_bonus
         self.semantic_retriever = semantic_retriever
@@ -1260,8 +1264,43 @@ class MemoryStore:
         graph_paths: Sequence[Dict[str, Any]],
         retrieval_trace: Dict[str, Any],
         speaker_conflict: bool,
+        result_count: int = 0,
     ) -> None:
         """Publish one completed Search snapshot without driving retrieval."""
+        if self.coding_retrieval:
+            plan_field_count = sum(
+                len(query_plan.get(key, []))
+                for key in (
+                    "core_terms", "expansion_terms", "entities",
+                    "temporal_cues", "evidence_needs",
+                )
+                if isinstance(query_plan.get(key, []), list)
+            )
+            need_diagnostics = retrieval_trace.get(
+                "evidence_need_diagnostics", {}
+            )
+            # Uvicorn's default config does not register this logger or attach
+            # an INFO handler; emit the payload-free diagnostic at WARNING so
+            # it reaches the container logs in the production runtime.
+            logging.getLogger("chrono_hybrid_mem").warning(
+                "coding_search_summary model_enabled=%s plan_fields=%d "
+                "lexical_candidates=%d rerank_candidates=%d reranked_ids=%d "
+                "empty_rank_order=%s returned=%d evidence_needs=%d "
+                "need_candidates=%d need_quota=%d need_reserved=%d",
+                bool(self.model),
+                plan_field_count,
+                len(retrieval_trace.get("p1_pre_rerank_ids", [])),
+                int(retrieval_trace.get("llm_rank_candidate_count", 0)),
+                int(retrieval_trace.get("coding_ranked_id_count", 0)),
+                bool(retrieval_trace.get("coding_ranker_empty_order", False)),
+                result_count,
+                int(need_diagnostics.get("need_count", 0)),
+                len(retrieval_trace.get("evidence_need_union_ids", [])),
+                int(need_diagnostics.get(
+                    "effective_quota", need_diagnostics.get("quota", 0)
+                )),
+                len(retrieval_trace.get("reserved_need_ids", [])),
+            )
         with self._retrieval_diagnostics_lock:
             self._last_speaker_conflict = speaker_conflict
             self._last_query_plan = copy.deepcopy(query_plan)
@@ -3471,6 +3510,22 @@ class MemoryStore:
 
     def add(self, request: AddRequest) -> None:
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        coding_facts = None
+        if (self.coding_retrieval and self.model
+                and not (self.evidence_graph or self.evidence_anchors)
+                and callable(getattr(self.model, "extract_coding_batch", None))):
+            # Check retries before remote work. Races are still resolved by the
+            # unique ingestion key in the write transaction below.
+            with self._connection() as check:
+                if check.execute("SELECT 1 FROM ingestions WHERE request_id = ?",
+                                 (request.request_id,)).fetchone():
+                    return
+            coding_facts = self.model.extract_coding_batch([
+                {"role": message.role, "content": message.content}
+                for message in request.messages
+            ])
+            if len(coding_facts) != len(request.messages):
+                raise RuntimeError("Coding annotations must align with source messages")
         with self._connection() as connection:
             try:
                 connection.execute(
@@ -3485,7 +3540,9 @@ class MemoryStore:
                 indexed_content = latent_message_text(
                     message.content, message.role, message.timestamp
                 )
-                code_terms = code_aware_index_terms(message.content)
+                code_terms = code_aware_index_terms(
+                    message.content, limit=512 if self.coding_retrieval else 96
+                )
                 if code_terms:
                     indexed_content += "\n" + " ".join(code_terms)
                 cursor = connection.execute(
@@ -3506,7 +3563,9 @@ class MemoryStore:
                 inserted_messages.append((message_id, indexed_content))
                 if self.model:
                     graph_payload = None
-                    if (self.evidence_graph or self.evidence_anchors) and callable(
+                    if coding_facts is not None:
+                        facts = coding_facts[sequence]
+                    elif (self.evidence_graph or self.evidence_anchors) and callable(
                         getattr(self.model, "extract_memory", None)
                     ):
                         extraction = self.model.extract_memory(
@@ -3786,6 +3845,10 @@ class MemoryStore:
         raw_terms = re.findall(r"[\w]+", query, flags=re.UNICODE)
         terms = [term for term in raw_terms if term.casefold() not in self.QUERY_STOP_WORDS]
         terms = terms or raw_terms
+        if self.coding_retrieval:
+            # Match a code-shaped query against the split source-side index.
+            # The original query and options still go to the planner unchanged.
+            terms.extend(code_aware_index_terms(query))
         support_terms = []
         query_plan: Dict[str, Any] = {}
         if self.model:
@@ -3827,6 +3890,7 @@ class MemoryStore:
                 graph_paths=graph_paths,
                 retrieval_trace=retrieval_trace,
                 speaker_conflict=speaker_conflict,
+                result_count=0,
             )
             return []
         match_query = " OR ".join('"{}"'.format(term.replace('"', '')) for term in terms)
@@ -4018,28 +4082,84 @@ class MemoryStore:
                             "need_{}_{}".format(need_index, channel_name)
                         ] = rows
             need_union_ids: List[str] = []
-            seen_need_ids = set()
-            need_best_scores: Dict[str, float] = {}
-            for rows in need_channel_rows.values():
-                for row in rows:
-                    candidate_id = "mem_{}".format(row["id"])
-                    if candidate_id not in seen_need_ids:
-                        seen_need_ids.add(candidate_id)
-                        need_union_ids.append(candidate_id)
-                    if self.need_select_by_bm25:
-                        try:
-                            score = float(row["bm25_score"])
-                        except (TypeError, ValueError, KeyError):
+            if self.coding_retrieval:
+                # BM25 scores are only meaningful inside one FTS query. Preserve
+                # each channel's query order, then round-robin channels within a
+                # need and needs across the union.
+                channel_orders_by_need: List[List[List[str]]] = [
+                    [] for _ in need_match_queries
+                ]
+                for channel_name, rows in need_channel_rows.items():
+                    channel_parts = channel_name.split("_", 2)
+                    if len(channel_parts) < 3:
+                        continue
+                    try:
+                        need_index = int(channel_parts[1])
+                    except ValueError:
+                        continue
+                    if not 0 <= need_index < len(channel_orders_by_need):
+                        continue
+                    channel_ids = []
+                    seen_channel_ids = set()
+                    for row in rows:
+                        candidate_id = "mem_{}".format(row["id"])
+                        if candidate_id not in seen_channel_ids:
+                            seen_channel_ids.add(candidate_id)
+                            channel_ids.append(candidate_id)
+                    channel_orders_by_need[need_index].append(channel_ids)
+                need_orders = []
+                for channel_orders in channel_orders_by_need:
+                    ordered = []
+                    seen_for_need = set()
+                    max_channel_depth = max(
+                        (len(channel) for channel in channel_orders), default=0
+                    )
+                    for depth in range(max_channel_depth):
+                        for channel in channel_orders:
+                            if depth >= len(channel):
+                                continue
+                            candidate_id = channel[depth]
+                            if candidate_id not in seen_for_need:
+                                seen_for_need.add(candidate_id)
+                                ordered.append(candidate_id)
+                    need_orders.append(ordered)
+                seen_need_ids = set()
+                max_need_depth = max(
+                    (len(ordered) for ordered in need_orders), default=0
+                )
+                for depth in range(max_need_depth):
+                    for ordered in need_orders:
+                        if depth >= len(ordered):
                             continue
-                        if (
-                            candidate_id not in need_best_scores
-                            or score < need_best_scores[candidate_id]
-                        ):
-                            # bm25 is negative and smaller = better; keep the
-                            # best (most negative) score across channels.
-                            need_best_scores[candidate_id] = score
-            if self.need_select_by_bm25 and need_best_scores:
-                need_union_ids.sort(key=lambda cid: need_best_scores.get(cid, 0.0))
+                        candidate_id = ordered[depth]
+                        if candidate_id not in seen_need_ids:
+                            seen_need_ids.add(candidate_id)
+                            need_union_ids.append(candidate_id)
+            else:
+                seen_need_ids = set()
+                need_best_scores: Dict[str, float] = {}
+                for rows in need_channel_rows.values():
+                    for row in rows:
+                        candidate_id = "mem_{}".format(row["id"])
+                        if candidate_id not in seen_need_ids:
+                            seen_need_ids.add(candidate_id)
+                            need_union_ids.append(candidate_id)
+                        if self.need_select_by_bm25:
+                            try:
+                                score = float(row["bm25_score"])
+                            except (TypeError, ValueError, KeyError):
+                                continue
+                            if (
+                                candidate_id not in need_best_scores
+                                or score < need_best_scores[candidate_id]
+                            ):
+                                # bm25 is negative and smaller = better; keep the
+                                # best (most negative) score across channels.
+                                need_best_scores[candidate_id] = score
+                if self.need_select_by_bm25 and need_best_scores:
+                    need_union_ids.sort(
+                        key=lambda cid: need_best_scores.get(cid, 0.0)
+                    )
             retrieval_trace["evidence_need_channels"] = {
                 name: ["mem_{}".format(row["id"]) for row in rows]
                 for name, rows in need_channel_rows.items()
@@ -4944,6 +5064,7 @@ class MemoryStore:
                 graph_paths=graph_paths,
                 retrieval_trace=retrieval_trace,
                 speaker_conflict=speaker_conflict,
+                result_count=len(dense_results),
             )
             return dense_results
         p1_union_ids: List[str] = []
@@ -5270,6 +5391,29 @@ class MemoryStore:
             session_fact_quota_active = (
                 self.session_fact_quota if session_fact_rows else 0
             )
+            if self.coding_retrieval and need_match_queries:
+                # Coding history often needs several complementary memories
+                # (for example a change plus its validation). Reserve one slot
+                # per planned need, up to the planner's four-need limit, while
+                # retaining the existing minimum quota of two.
+                desired_need_quota = max(
+                    need_quota, min(len(need_match_queries), 4)
+                )
+                if self.sidecar_shared_quota > 0:
+                    need_quota = min(desired_need_quota, self.sidecar_shared_quota)
+                else:
+                    available_quota = max(
+                        0,
+                        self.MODEL_RERANK_LIMIT
+                        - special_quota
+                        - bridge_quota
+                        - relax_quota
+                        - session_fact_quota_active,
+                    )
+                    need_quota = min(desired_need_quota, available_quota)
+                retrieval_trace["evidence_need_diagnostics"][
+                    "effective_quota"
+                ] = need_quota
             if self.sidecar_shared_quota > 0:
                 # Shared sidecar pool: need, bridge and relax candidates compete
                 # for ONE total reservation, so the P1 base budget is compressed
@@ -5506,7 +5650,19 @@ class MemoryStore:
                     ),
                 })
             retrieval_trace["llm_rank_candidate_count"] = len(candidates)
-            ordered_ids = self.model.rank_candidates(query, options or [], candidates)
+            if self.coding_retrieval:
+                from .coding_retrieval import evidence_excerpt
+                for candidate in candidates:
+                    candidate["content"] = evidence_excerpt(candidate["content"], terms)
+                ranker = getattr(self.model, "rank_coding_candidates", self.model.rank_candidates)
+            else:
+                ranker = self.model.rank_candidates
+            ordered_ids = ranker(query, options or [], candidates)
+            if self.coding_retrieval:
+                retrieval_trace["coding_ranked_id_count"] = len(ordered_ids)
+                retrieval_trace["coding_ranker_empty_order"] = bool(
+                    candidates and not ordered_ids
+                )
             rank_confidence: Dict[str, float] = {}
             if self.p5_gate and hasattr(self.model, "rank_candidates_with_confidence"):
                 ordered_ids, rank_confidence = (
@@ -5536,7 +5692,11 @@ class MemoryStore:
             ranking_metadata=ranking_metadata,
             message_ids=message_ids if self.model else None,
         )
-        final_results = deduplicated[:top_k]
+        result_limit = (
+            min(top_k, self.CODING_TOP_K_MAX)
+            if self.coding_retrieval else top_k
+        )
+        final_results = deduplicated[:result_limit]
         retrieval_trace["final_ids"] = [
             result.id for result in final_results
         ]
@@ -5547,5 +5707,6 @@ class MemoryStore:
             graph_paths=graph_paths,
             retrieval_trace=retrieval_trace,
             speaker_conflict=speaker_conflict,
+            result_count=len(final_results),
         )
         return final_results

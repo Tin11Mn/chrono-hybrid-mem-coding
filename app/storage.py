@@ -1276,7 +1276,10 @@ class MemoryStore:
                 )
                 if isinstance(query_plan.get(key, []), list)
             )
-            logging.getLogger("chrono_hybrid_mem").info(
+            # Uvicorn's default config does not register this logger or attach
+            # an INFO handler; emit the payload-free diagnostic at WARNING so
+            # it reaches the container logs in the production runtime.
+            logging.getLogger("chrono_hybrid_mem").warning(
                 "coding_search_summary model_enabled=%s plan_fields=%d "
                 "lexical_candidates=%d rerank_candidates=%d reranked_ids=%d "
                 "empty_rank_order=%s returned=%d",

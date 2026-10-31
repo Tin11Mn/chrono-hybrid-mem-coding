@@ -1,9 +1,12 @@
+import logging
 import math
 import os
 
 import secrets
 
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.security import HTTPBearer
 
 from .schemas import AddRequest, AddResponse, SearchRequest, SearchResponse
@@ -475,6 +478,44 @@ def create_app(database_path: str = None) -> FastAPI:
     )
     store.initialize()
     app = FastAPI(title="ChronoHybridMem", version="0.4.0-local")
+
+    @app.exception_handler(RequestValidationError)
+    async def log_request_validation_error(request, exc):
+        # Record only schema locations and Pydantic error classes. Never log
+        # the submitted values: Search queries and Add memories are private.
+        if request.url.path in {"/add", "/search"}:
+            allowed_fields = {
+                "body", "query", "path", "header", "request_id", "messages",
+                "role", "content", "timestamp", "user_id", "session_id",
+                "options", "top_k",
+            }
+            allowed_types = {
+                "missing", "string_type", "string_too_short", "int_type",
+                "greater_than_equal", "less_than_equal", "list_type",
+                "model_type", "json_invalid",
+                "value_error.missing", "type_error.str",
+                "value_error.any_str.min_length", "type_error.integer",
+                "value_error.number.not_ge", "value_error.number.not_le",
+                "type_error.list", "type_error.dict", "value_error.jsondecode",
+            }
+            failures = set()
+            for error in exc.errors():
+                location = error.get("loc", ())
+                field_path = ".".join(
+                    str(part) if str(part) in allowed_fields else "<field>"
+                    for part in location[:4]
+                ) or "<unknown>"
+                error_type = error.get("type", "")
+                if error_type not in allowed_types:
+                    error_type = "other"
+                failures.add("{}:{}".format(field_path, error_type))
+            logging.getLogger("chrono_hybrid_mem").warning(
+                "coding_request_validation path=%s error_count=%d fields=%s",
+                request.url.path,
+                len(exc.errors()),
+                ",".join(sorted(failures)) or "<unknown>",
+            )
+        return await request_validation_exception_handler(request, exc)
 
     @app.get("/health")
     def health() -> dict:

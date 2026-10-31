@@ -94,6 +94,66 @@ def test_ranker_filters_unknown_ids_duplicates_and_non_list_output():
     assert model.rank_coding_candidates("bug", [], candidates) == []
 
 
+def test_coding_ranker_runtime_fallback_is_logged_without_payload(caplog):
+    import logging
+
+    model = object.__new__(MemoryModel)
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("synthetic upstream failure")
+
+    model._json_response = fail
+    with caplog.at_level(logging.WARNING, logger="chrono_hybrid_mem"):
+        result = model.rank_coding_candidates(
+            "private-query-marker",
+            [],
+            [{"id": "mem_1", "content": "private-memory-marker"}],
+        )
+    assert result == []
+    assert "coding_ranker_fallback reason=model_response_runtime_error" in caplog.text
+    assert "private-query-marker" not in caplog.text
+    assert "private-memory-marker" not in caplog.text
+
+
+def test_coding_search_summary_logs_counts_without_payload(caplog, tmp_path):
+    import logging
+
+    class RecordingModel:
+        def plan_query(self, query, options):
+            return []
+
+        def extract_facts(self, content, **kwargs):
+            return []
+
+        def rank_coding_candidates(self, query, options, candidates):
+            return [candidate["id"] for candidate in candidates]
+
+        def rank_candidates(self, query, options, candidates):
+            raise AssertionError("Coding mode should use the coding ranker")
+
+    model = RecordingModel()
+    store = MemoryStore(
+        str(tmp_path / "summary.db"), model=model, coding_retrieval=True
+    )
+    store.initialize()
+    store.add(AddRequest(
+        request_id="summary-fixture", user_id="summary-user", session_id="s",
+        messages=[{"role": "assistant", "content":
+                   "path/to/private-memory-marker.py fixed the regression"}],
+    ))
+    with caplog.at_level(logging.INFO, logger="chrono_hybrid_mem"):
+        result = store.search(
+            user_id="summary-user", query="private-query-marker regression", top_k=10
+        )
+    assert result
+    assert "coding_search_summary" in caplog.text
+    assert "model_enabled=True" in caplog.text
+    assert "reranked_ids=1" in caplog.text
+    assert "returned=1" in caplog.text
+    assert "private-query-marker" not in caplog.text
+    assert "private-memory-marker" not in caplog.text
+
+
 def test_batch_cues_are_bounded_and_bound_to_supplied_indices():
     model = object.__new__(MemoryModel)
     calls = []

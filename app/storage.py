@@ -1,5 +1,6 @@
 import copy
 import hashlib
+import logging
 import re
 import sqlite3
 import math
@@ -1263,8 +1264,30 @@ class MemoryStore:
         graph_paths: Sequence[Dict[str, Any]],
         retrieval_trace: Dict[str, Any],
         speaker_conflict: bool,
+        result_count: int = 0,
     ) -> None:
         """Publish one completed Search snapshot without driving retrieval."""
+        if self.coding_retrieval:
+            plan_field_count = sum(
+                len(query_plan.get(key, []))
+                for key in (
+                    "core_terms", "expansion_terms", "entities",
+                    "temporal_cues", "evidence_needs",
+                )
+                if isinstance(query_plan.get(key, []), list)
+            )
+            logging.getLogger("chrono_hybrid_mem").info(
+                "coding_search_summary model_enabled=%s plan_fields=%d "
+                "lexical_candidates=%d rerank_candidates=%d reranked_ids=%d "
+                "empty_rank_order=%s returned=%d",
+                bool(self.model),
+                plan_field_count,
+                len(retrieval_trace.get("p1_pre_rerank_ids", [])),
+                int(retrieval_trace.get("llm_rank_candidate_count", 0)),
+                int(retrieval_trace.get("coding_ranked_id_count", 0)),
+                bool(retrieval_trace.get("coding_ranker_empty_order", False)),
+                result_count,
+            )
         with self._retrieval_diagnostics_lock:
             self._last_speaker_conflict = speaker_conflict
             self._last_query_plan = copy.deepcopy(query_plan)
@@ -3854,6 +3877,7 @@ class MemoryStore:
                 graph_paths=graph_paths,
                 retrieval_trace=retrieval_trace,
                 speaker_conflict=speaker_conflict,
+                result_count=0,
             )
             return []
         match_query = " OR ".join('"{}"'.format(term.replace('"', '')) for term in terms)
@@ -4971,6 +4995,7 @@ class MemoryStore:
                 graph_paths=graph_paths,
                 retrieval_trace=retrieval_trace,
                 speaker_conflict=speaker_conflict,
+                result_count=len(dense_results),
             )
             return dense_results
         p1_union_ids: List[str] = []
@@ -5541,6 +5566,11 @@ class MemoryStore:
             else:
                 ranker = self.model.rank_candidates
             ordered_ids = ranker(query, options or [], candidates)
+            if self.coding_retrieval:
+                retrieval_trace["coding_ranked_id_count"] = len(ordered_ids)
+                retrieval_trace["coding_ranker_empty_order"] = bool(
+                    candidates and not ordered_ids
+                )
             rank_confidence: Dict[str, float] = {}
             if self.p5_gate and hasattr(self.model, "rank_candidates_with_confidence"):
                 ordered_ids, rank_confidence = (
@@ -5585,5 +5615,6 @@ class MemoryStore:
             graph_paths=graph_paths,
             retrieval_trace=retrieval_trace,
             speaker_conflict=speaker_conflict,
+            result_count=len(final_results),
         )
         return final_results

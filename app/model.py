@@ -1,6 +1,7 @@
 """Narrow `gpt-4o-mini` integration for factual memory extraction and ranking."""
 
 import json
+import logging
 import os
 import re
 import threading
@@ -211,6 +212,9 @@ class MemoryModel:
             # A local llama.cpp screen must not lose an entire chunk because a
             # bounded generation ended mid-JSON. Callers retain safe first-stage
             # behavior when the returned object is empty.
+            logging.getLogger("chrono_hybrid_mem").warning(
+                "memory_model_json_parse_fallback endpoint=custom"
+            )
             return {}
         raise RuntimeError("gpt-4o-mini returned a non-object JSON response")
 
@@ -656,6 +660,9 @@ class MemoryModel:
                 max_tokens=400,
             )
         except RuntimeError:
+            logging.getLogger("chrono_hybrid_mem").warning(
+                "coding_ranker_fallback reason=model_response_runtime_error"
+            )
             return []
         allowed = {candidate["id"] for candidate in candidates}
         result = []
@@ -664,6 +671,10 @@ class MemoryModel:
             for item in ordered:
                 if isinstance(item, str) and item in allowed and item not in result:
                     result.append(item)
+        if not result:
+            logging.getLogger("chrono_hybrid_mem").warning(
+                "coding_ranker_fallback reason=empty_or_invalid_order"
+            )
         return result[:12]
 
     def rank_candidates_with_confidence(
